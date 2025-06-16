@@ -1,0 +1,9 @@
+{
+  "domain": "sony_avr_tcp",
+  "name": "Sony AVR TCP",
+  "version": "0.1",
+  "documentation": "https://github.com/gonzonia/ha_sony_avr_tcp",
+  "dependencies": [],
+  "codeowners": ["@gonzonia"],
+  "requirements": []
+}
