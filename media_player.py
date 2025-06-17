@@ -15,12 +15,11 @@ _LOGGER = logging.getLogger(__name__)
 
 def send_json(host, port, json_obj, expect_response=False):
     try:
-        json_str = json_obj if isinstance(json_obj, str) else json.dumps(json_obj)
+        json_str = json.dumps(json_obj)
         with socket.create_connection((host, port), timeout=2) as sock:
             sock.sendall(json_str.encode("utf-8"))
             if expect_response:
-                response = sock.recv(4096)
-                return response.decode("utf-8")
+                return sock.recv(4096).decode("utf-8")
         return True
     except Exception as e:
         _LOGGER.error("Failed to send JSON to %s:%s - %s", host, port, e)
@@ -35,7 +34,9 @@ class SonyAVR(MediaPlayerEntity):
         self._volume_level = 0.5
         self._muted = False
         self._source = None
-        self._source_list = ["cd", "tuner", "am", "fm", "sat", "video", "stb", "aux", "game", "bd", "tv"]
+        self._source_list = [
+            "cd", "tuner", "am", "fm", "sat", "video", "stb", "aux", "game", "bd", "tv"
+        ]
 
     def turn_on(self):
         send_json(self._host, self._port, {"type": "set", "feature": "main.power", "value": "on"})
@@ -62,49 +63,38 @@ class SonyAVR(MediaPlayerEntity):
             self._source = source
 
     def update(self):
-        def get_value(feature):
-            resp = send_json(self._host, self._port, {"type": "get", "feature": feature}, expect_response=True)
+        def get_val(feature):
             try:
+                resp = send_json(self._host, self._port, {"type": "get", "feature": feature}, expect_response=True)
                 return json.loads(resp)["value"]
             except:
                 return None
 
-        power = get_value("main.power")
-        self._state = MediaPlayerState.ON if power == "on" else MediaPlayerState.OFF
+        if (power := get_val("main.power")):
+            self._state = MediaPlayerState.ON if power == "on" else MediaPlayerState.OFF
 
-        mute = get_value("main.mute")
-        self._muted = mute == "on"
+        if (mute := get_val("main.mute")):
+            self._muted = mute == "on"
 
-        vol = get_value("main.volume")
-        try:
-            self._volume_level = min(1.0, int(vol) / 74) if vol else 0.5
-        except:
-            pass
+        if (vol := get_val("main.volume")):
+            try:
+                self._volume_level = min(1.0, int(vol) / 74)
+            except:
+                pass
 
-        input_source = get_value("main.input")
-        if input_source:
-            self._source = input_source
-
-    @property
-    def state(self):
-        return self._state
+        if (src := get_val("main.input")):
+            self._source = src
 
     @property
-    def volume_level(self):
-        return self._volume_level
-
+    def state(self): return self._state
     @property
-    def is_volume_muted(self):
-        return self._muted
-
+    def volume_level(self): return self._volume_level
     @property
-    def source(self):
-        return self._source
-
+    def is_volume_muted(self): return self._muted
     @property
-    def source_list(self):
-        return self._source_list
-
+    def source(self): return self._source
+    @property
+    def source_list(self): return self._source_list
     @property
     def supported_features(self):
         return (
@@ -115,7 +105,7 @@ class SonyAVR(MediaPlayerEntity):
             | MediaPlayerEntityFeature.SELECT_SOURCE
         )
 
-async def async_setup_platform(hass, config: ConfigType, async_add_entities, discovery_info: DiscoveryInfoType = None):
+async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
     host = config.get("host")
     port = config.get("port")
     async_add_entities([SonyAVR(host, port)])
