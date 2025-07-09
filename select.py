@@ -29,20 +29,47 @@ class SonyHDMIOutSelect(SelectEntity):
         self._host = host
         self._port = port
         self._attr_name = "Sony AVR HDMI Out"
+        self._attr_icon = "mdi:video-switch"
         self._options = ["A", "B", "AB", "OFF"]
-        self._current = None
+        self._current = "A"  # default so state isn't None
 
     @property
-    def options(self): return self._options
-    @property
-    def current_option(self): return self._current
+    def options(self):
+        return self._options
 
-    def select_option(self, option):
-        send_json(self._host, self._port, {"type": "set", "feature": "hdmi.out", "value": option})
-        self._current = option
+    @property
+    def current_option(self):
+        return self._current
+
+    def select_option(self, option: str) -> None:
+        if option in self._options:
+            success = send_json(self._host, self._port, {
+                "type": "set",
+                "feature": "hdmi.out",
+                "value": option
+            })
+            if success:
+                self._current = option
+            else:
+                _LOGGER.warning("Failed to set HDMI OUT to %s", option)
 
     def update(self):
-        self._current = get_json(self._host, self._port, "hdmi.out")
+        try:
+            with socket.create_connection((self._host, self._port), timeout=2) as sock:
+                sock.sendall(json.dumps({
+                    "type": "get",
+                    "feature": "hdmi.out"
+                }).encode("utf-8"))
+                resp = sock.recv(4096).decode("utf-8")
+                data = json.loads(resp)
+                value = data.get("value")
+                if value in self._options:
+                    self._current = value
+                else:
+                    _LOGGER.warning("Unknown HDMI OUT value: %s", value)
+        except Exception as e:
+            _LOGGER.warning("Failed to update HDMI OUT: %s", e)
+
 
 class SonySoundFieldSelect(SelectEntity):
     def __init__(self, host, port):
